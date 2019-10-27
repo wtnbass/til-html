@@ -1,0 +1,54 @@
+{
+  "name": "til-html",
+  "version": "0.0.1",
+  "description": "Yet another lit-html",
+  "author": "Keisuke Watanabe",
+  "license": "MIT",
+  "source": "src/index.js",
+  "main": "dist/til-html.js",
+  "module": "dist/til-html.mjs",
+  "umd:main": "dist/til-html.umd.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "microbundle",
+    "build:watch": "microbundle watch",
+    "test": "karma start",
+    "test:watch": "karma start --no-single-run",
+    "clean": "rm -fr dist",
+    "lint": "eslint src",
+    "fmt": "prettier --write src/**"
+  },
+  "devDependencies": {
+    "chai": "4.2.0",
+    "eslint": "6.6.0",
+    "eslint-config-prettier": "6.5.0",
+    "eslint-plugin-prettier": "3.1.1",
+    "karma": "4.4.1",
+    "karma-chrome-launcher": "3.1.0",
+    "karma-mocha": "1.3.0",
+    "karma-sinon-chai": "2.0.2",
+    "microbundle": "0.11.0",
+    "mocha": "6.2.2",
+    "prettier": "1.18.2",
+    "sinon": "7.5.0",
+    "sinon-chai": "3.3.0"
+  },
+  "mangle": {
+    "regex": "^_"
+  },
+  "eslintConfig": {
+    "env": {
+      "browser": true,
+      "es2020": true
+    },
+    "parserOptions": {
+      "sourceType": "module"
+    },
+    "extends": [
+      "plugin:prettier/recommended",
+      "eslint:recommended"
+    ]
+  }
+}
