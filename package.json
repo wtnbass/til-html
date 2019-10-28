@@ -13,12 +13,12 @@
   ],
   "scripts": {
     "build": "microbundle",
-    "build:watch": "microbundle watch",
+    "watch": "microbundle watch",
     "test": "karma start",
     "test:watch": "karma start --no-single-run",
     "clean": "rm -fr dist",
     "lint": "eslint src",
-    "fmt": "prettier --write src/**"
+    "fmt": "prettier --write {src,test}/**"
   },
   "devDependencies": {
     "chai": "4.2.0",

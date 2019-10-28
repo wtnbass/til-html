@@ -108,10 +108,8 @@ function parse(htmls) {
         } else if ((r = html.match(openTagRegexp))) {
           html = html.slice(r[0].length);
 
-          const next = { tag: r[1], children: [] };
-          current.children.push(next);
           stack.push(current);
-          current = next;
+          current.children.push((current = { tag: r[1], children: [] }));
           inTag = true;
         } else {
           const pos = html.indexOf("<");
@@ -320,10 +318,7 @@ function stringify(vdom, args) {
     }
 
     if (children.length) {
-      s +=
-        ">" +
-        children.reduce((acc, child) => acc + stringify(child, args), "") +
-        `</${tag}>`;
+      s += ">" + stringify(children, args) + `</${tag}>`;
     } else if (voidTagNameRegexp.test(tag)) {
       s += ">";
     } else {
