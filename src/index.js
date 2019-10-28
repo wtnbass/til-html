@@ -21,40 +21,34 @@ const prefixAttributesTypes = {
   "@": TYPE_EVENT
 };
 
-const Field = Symbol("Field");
+const Field = Symbol();
 
-const Template = Symbol("Template");
+const Template = Symbol();
 
 const Cache = new WeakMap();
 
-export function html(strings, ...values) {
+export function html(strings) {
   let vdom = Cache.get(strings);
-  if (!vdom) {
-    Cache.set(strings, (vdom = parse(strings)));
-  }
+  vdom || Cache.set(strings, (vdom = parse(strings)));
+  let key = vdom[0].props && vdom[0].props.key;
+  if (key != null && key[Field]) key = arguments[key[Field]];
 
-  let key;
-  if (vdom[0].props && vdom[0].props.key) {
-    key = vdom[0].props.key;
-    if (key[Field]) key = values[key[Field]];
-  }
-
-  return { [Template]: [vdom, values, key] };
+  return { [Template]: [vdom, arguments, key] };
 }
 
 export function render(template, container) {
-  const [vdom, values] = template[Template];
+  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [, template]];
   let mutations = Cache.get(container);
   if (!mutations) {
     mount(vdom, container, (mutations = []));
     Cache.set(container, mutations);
   }
-  setValues(mutations, values);
+  resolve(mutations, args);
 }
 
 export function renderToString(template) {
-  const [vdom, values] = template[Template];
-  return stringify(vdom, values);
+  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [, template]];
+  return stringify(vdom, args);
 }
 
 function parse(htmls) {
@@ -75,7 +69,7 @@ function parse(htmls) {
   };
 
   for (let i = 0; i < htmls.length; i++) {
-    if (i) commit({ [Field]: i - 1 });
+    if (i) commit({ [Field]: i });
     let html = htmls[i];
     let last;
     let r;
@@ -135,7 +129,7 @@ function mount(vdom, parent, mutations) {
   if (Array.isArray(vdom)) {
     vdom.forEach(v => mount(v, parent, mutations));
   } else if (!vdom.tag) {
-    if (vdom[Field] != null) {
+    if (vdom[Field]) {
       mutations[vdom[Field]] = {
         type: TYPE_NODE,
         node: parent.appendChild(document.createComment(""))
@@ -150,7 +144,7 @@ function mount(vdom, parent, mutations) {
     props &&
       Object.keys(props).forEach(name => {
         if (name === "key") return;
-        if (props[name][Field] != null) {
+        if (props[name][Field]) {
           const r = name.match(attrPrefixRegexp);
           mutations[props[name][Field]] = {
             type: r ? prefixAttributesTypes[r[1]] : TYPE_ATTR,
@@ -165,99 +159,96 @@ function mount(vdom, parent, mutations) {
   }
 }
 
-function setValues(mutations, values) {
-  for (let i = 0; i < mutations.length; i++) {
+function resolve(mutations, args) {
+  for (let i = 1; i < mutations.length; i++) {
     if (!mutations[i]) continue;
     const { type, node, name, prev } = mutations[i];
-    if (values[i] !== prev) {
+    if (args[i] !== prev) {
       if (type === TYPE_NODE) {
-        resolveNode(mutations[i], values[i], prev);
+        resolveNode(mutations[i], args[i], prev, 0);
       } else if (type === TYPE_ATTR) {
         if (name === "ref") {
-          if (typeof values[i] === "function") {
-            values[i](node);
-          } else {
-            values[i].current = node;
-          }
+          typeof args[i] === "function"
+            ? args[i](node)
+            : (args[i].current = node);
         } else {
-          node.setAttribute(name, values[i]);
+          node.setAttribute(name, args[i]);
         }
       } else if (type === TYPE_BOOL_ATTR) {
-        if (values[i]) {
-          node.setAttribute(name, "");
-        } else {
-          node.removeAttribute(name);
-        }
+        args[i] ? node.setAttribute(name, "") : node.removeAttribute(name);
       } else if (type === TYPE_PROPS) {
-        node[name] = values[i];
+        node[name] = args[i];
       } else if (type === TYPE_EVENT) {
         prev && node.removeEventListener(name, prev);
-        node.addEventListener(name, values[i]);
+        node.addEventListener(name, args[i]);
       }
-      mutations[i].prev = values[i];
+      mutations[i].prev = args[i];
     }
   }
 }
 
-function resolveNode(mutation, next, prev, index = 0) {
-  if (Array.isArray(next || prev)) {
-    resolveChildren(mutation, next || [], prev || []);
-  } else if ((next || prev)[Template] != null) {
+function resolveNode(mutation, next, prev, index) {
+  const base = next != null ? next : prev;
+  if (Array.isArray(base)) {
+    prev = prev || [];
+    if (mutation._mutations && base[0][Template][2] != null) {
+      resolveTemplatesWithKey(mutation, next, prev);
+    } else {
+      for (let i = 0; i < prev.length || i < next.length; i++) {
+        resolveNode(mutation, next[i], prev[i], i);
+      }
+    }
+  } else if (base[Template]) {
     resolveTemplate(mutation, next, prev, index);
   } else {
     resolveText(mutation, next, prev, index);
   }
 }
 
-function resolveChildren(mutation, nexts, prevs) {
-  for (let i = 0; i < nexts.length || i < prevs.length; i++) {
-    if ((nexts[i] || prevs[i])[Template]) {
-      let next = nexts[i];
-      let prev = prevs[i];
-      let key;
-      if (next && (key = next[Template][2])) {
-        for (let j = 0; j < prevs.length; j++) {
-          if (prevs[j] && key === prevs[j][Template][2]) {
-            prev = prevs[j];
-            break;
-          }
-          prev = undefined;
-        }
-      }
+function resolveTemplatesWithKey(parentMutation, nexts, prevs) {
+  const mutations = parentMutation._mutations;
+  const nextMutations = [];
+  const nextKeys = nexts.map(t => t[Template][2]);
+  const prevKeys = prevs.map(t => t[Template][2]);
+  let prevIndex = 0;
+  let nextIndex = 0;
+  while (prevIndex < prevKeys.length || nextIndex < nextKeys.length) {
+    const prevKey = prevKeys[prevIndex];
+    const nextKey = nextKeys[nextIndex];
+    const next = nexts[nextIndex];
 
-      resolveTemplate(mutation, next, prev, i);
+    if (nextKey != null && !prevKeys.includes(nextKey)) {
+      const refNode = mutations[nextIndex]
+        ? mutations[nextIndex]._marks[0]
+        : parentMutation.node;
+      nextMutations[nextIndex++] = insertTemplate(next, refNode);
+    } else if (prevKey != null && !nextKeys.includes(prevKey)) {
+      removeTemplate(mutations[prevIndex++]);
     } else {
-      resolveText(mutation, nexts[i], prevs[i], i);
+      resolve(
+        (nextMutations[nextIndex++] = mutations[prevIndex++]),
+        next[Template][1]
+      );
     }
   }
+  parentMutation._mutations = nextMutations;
 }
 
-function resolveTemplate(m, next, prev, index = 0) {
+function resolveTemplate(m, next, prev, index) {
   if (!prev) {
-    const [vdom, values] = next[Template];
-    const fragment = document.createDocumentFragment();
-    const start = document.createComment("");
-    const end = document.createComment("");
-    (m._marks || (m._marks = []))[index] = [start, end];
-    mount(vdom, fragment, ((m._mutations || (m._mutations = []))[index] = []));
-    setValues(m._mutations[index], values);
-    insertNode(start, m.node);
-    insertNode(fragment, m.node);
-    insertNode(end, m.node);
+    m._mutations = m._mutations || [];
+    const refNode = m._mutations[index + 1]
+      ? m._mutations[index + 1]._marks[0]
+      : m.node;
+    m._mutations[index] = insertTemplate(next, refNode);
   } else if (!next) {
-    let [start, end] = m._marks[index];
-    while (start !== end) {
-      const next = start.nextSibling;
-      end.parentNode.removeChild(start);
-      start = next;
-    }
-    end.parentNode.removeChild(end);
+    removeTemplate(m._mutations[index]);
   } else {
-    setValues(m._mutations[index], next[Template][1]);
+    resolve(m._mutations[index], next[Template][1]);
   }
 }
 
-function resolveText(m, next, prev, index = 0) {
+function resolveText(m, next, prev, index) {
   if (!prev) {
     if (next == null) next = "";
     insertNode(
@@ -271,20 +262,42 @@ function resolveText(m, next, prev, index = 0) {
   }
 }
 
+function insertTemplate(template, refNode) {
+  const [vdom, args] = template[Template];
+  const fragment = document.createDocumentFragment();
+  const mutations = [];
+  mutations._marks = [document.createComment(""), document.createComment("")];
+  mount(vdom, fragment, mutations);
+  resolve(mutations, args);
+  insertNode(mutations._marks[0], refNode);
+  insertNode(fragment, refNode);
+  insertNode(mutations._marks[1], refNode);
+  return mutations;
+}
+
+function removeTemplate(mutations) {
+  let [start, end] = mutations._marks;
+  while (start !== end) {
+    const next = start.nextSibling;
+    end.parentNode.removeChild(start);
+    start = next;
+  }
+  end.parentNode.removeChild(end);
+}
+
 function insertNode(newNode, refNode) {
   refNode.parentNode.insertBefore(newNode, refNode);
 }
 
-function stringify(vdom, values) {
+function stringify(vdom, args) {
   if (Array.isArray(vdom)) {
-    return vdom.reduce((acc, v) => acc + stringify(v, values), "");
-  } else if (vdom[Field] != null) {
-    return stringify(values[vdom[Field]]);
-  } else if (vdom[Template] != null) {
+    return vdom.reduce((acc, v) => acc + stringify(v, args), "");
+  } else if (vdom[Field]) {
+    return stringify(args[vdom[Field]]);
+  } else if (vdom[Template]) {
     return renderToString(vdom);
   } else if (!vdom.tag) {
-    if (vdom == null) vdom = "";
-    return String(vdom);
+    return vdom != null ? "" + vdom : "";
   } else {
     const { tag, props, children } = vdom;
     let s = `<${tag}`;
@@ -292,9 +305,9 @@ function stringify(vdom, values) {
       let r;
       let attrs = [];
       for (const name of Object.keys(props)) {
-        if (name === "key") continue;
+        if (name === "key" || name === "ref") continue;
         let v = props[name];
-        if (v[Field] != null) v = values[v[Field]];
+        if (v[Field]) v = args[v[Field]];
         if ((r = name.match(attrPrefixRegexp))) {
           if (r[0] === "?" && v) attrs.push(name.slice(1));
         } else {
@@ -307,9 +320,12 @@ function stringify(vdom, values) {
     }
 
     if (children.length) {
+      s +=
+        ">" +
+        children.reduce((acc, child) => acc + stringify(child, args), "") +
+        `</${tag}>`;
+    } else if (voidTagNameRegexp.test(tag)) {
       s += ">";
-      s += children.reduce((acc, child) => acc + stringify(child, values), "");
-      s += `</${tag}>`;
     } else {
       s += "/>";
     }

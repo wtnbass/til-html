@@ -2,29 +2,35 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
   <title>Debug</title>
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="app"></div>
+  <div id="app2"></div>
+  <div id="app3"></div>
   <script type="module">
-    import { html, render, renderToString } from "../dist/til-html.mjs";
+    import { html, render, renderToString } from "/dist/til-html.mjs";
+    const appElement = document.getElementById("app");
+    const app2Element = document.getElementById("app2");
+    const app3Element = document.getElementById("app3");
     let state = {
       num: 999,
       bool: false,
       name: "World",
       mouseover: () => console.log("init"),
-      arr: ["a", "b", "c"],
+      arr: ["a", "b", "c", false],
       users: [
         { id: 1, name: "John" },
         { id: 10, name: "Mary" },
-        { id: 20, name: "Aria" },
-      ]
+        { id: 20, name: "Alice" }
+      ],
+      $checkbox: { current: null }
     };
-
+    window.state = state;
     const app = () => html`
       <!doctype html>
       <!-- comment -->
@@ -37,27 +43,40 @@
       <small>
         <div />
         <b>break
-        <input type="checkbox" ref=${node => (window.$checkbox = node)} />
+        <input type="checkbox" ref=${state.$checkbox} />
         <p>tag</p>
       </small>
       <div>
-        ${html`<h4>template ${state.name}</h4>`}
+        ${html`
+          <h4>template ${state.name}</h4>
+        `}
       </div>
       <div>
         <h5>${state.arr}</h5>
         <ul>
-          ${state.users.map(u => html`
-            <li key=${u.id}>${u.name}</li>
-          `)}
+          ${state.users.map(
+      u => html`
+              <li key=${u.id}>${u.name}</li>
+            `
+    )}
+        </ul>
+        <ul>
+          ${state.users.map(
+      u => html`
+              <li>${u.id}: ${u.name}</li>
+            `
+    )}
         </ul>
       </div>
     `;
-    const rootElement = document.getElementById("root");
     const update = () => {
       const result = app();
-      render(result, rootElement);
+      render(result, appElement);
       console.log(renderToString(result));
     };
+
+    const update2 = str => render(str, app2Element);
+    const update3 = arr => render(arr, app3Element);
     const once = fn =>
       new Promise(resolve => {
         const handler = () => {
@@ -70,6 +89,8 @@
       });
     async function main() {
       update();
+      update2("string to render");
+      update3(["array", "to", "render"]);
       await once(() => {
         state.num = 1;
       });
@@ -83,13 +104,31 @@
         state.mouseover = () => console.log("change");
       });
       await once(() => {
-        state.arr = ["b", "c"]
+        state.arr = ["b", "c"];
+        state.users = [{ id: 1, name: "John" }, { id: 20, name: "Alice" }];
+      });
+      await once(() => {
         state.users = [
           { id: 1, name: "John" },
-          { id: 20, name: "Aria" },
-        ]
-
-      })
+          { id: 11, name: "Bob" },
+          { id: 20, name: "Alice" },
+          { id: 31, name: "Kim" }
+        ];
+      });
+      await once(() => {
+        state.users = [
+          { id: 31, name: "Kim" },
+          { id: 1, name: "John" },
+          { id: 20, name: "Alice" },
+          { id: 11, name: "Bob" }
+        ];
+      });
+      await once(() => {
+        update2("change...");
+      });
+      await once(() => {
+        update3(["help", "!!"]);
+      });
     }
     main();
   </script>
