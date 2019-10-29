@@ -38,10 +38,10 @@ open http://localhost:8000/test/debug.html
 From microbundle log
 
 ```[sh]
-1947 B: til-html.js.gz
-1741 B: til-html.js.br
-1946 B: til-html.mjs.gz
-1757 B: til-html.mjs.br
-2021 B: til-html.umd.js.gz
-1797 B: til-html.umd.js.br
+1949 B: til-html.js.gz
+1737 B: til-html.js.br
+1949 B: til-html.mjs.gz
+1756 B: til-html.mjs.br
+2024 B: til-html.umd.js.gz
+1795 B: til-html.umd.js.br
 ```

@@ -37,7 +37,7 @@ export function html(strings) {
 }
 
 export function render(template, container) {
-  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [, template]];
+  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [0, template]];
   let mutations = Cache.get(container);
   if (!mutations) {
     mount(vdom, container, (mutations = []));
@@ -47,7 +47,7 @@ export function render(template, container) {
 }
 
 export function renderToString(template) {
-  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [, template]];
+  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [0, template]];
   return stringify(vdom, args);
 }
 
@@ -216,10 +216,12 @@ function resolveTemplatesWithKey(parentMutation, nexts, prevs) {
     const next = nexts[nextIndex];
 
     if (nextKey != null && !prevKeys.includes(nextKey)) {
-      const refNode = mutations[nextIndex]
-        ? mutations[nextIndex]._marks[0]
-        : parentMutation.node;
-      nextMutations[nextIndex++] = insertTemplate(next, refNode);
+      nextMutations[nextIndex++] = insertTemplate(
+        next,
+        mutations[prevIndex]
+          ? mutations[prevIndex]._marks[0]
+          : parentMutation.node
+      );
     } else if (prevKey != null && !nextKeys.includes(prevKey)) {
       removeTemplate(mutations[prevIndex++]);
     } else {
@@ -235,12 +237,13 @@ function resolveTemplatesWithKey(parentMutation, nexts, prevs) {
 function resolveTemplate(m, next, prev, index) {
   if (!prev) {
     m._mutations = m._mutations || [];
-    const refNode = m._mutations[index + 1]
-      ? m._mutations[index + 1]._marks[0]
-      : m.node;
-    m._mutations[index] = insertTemplate(next, refNode);
+    m._mutations[index] = insertTemplate(
+      next,
+      m._mutations[index + 1] ? m._mutations[index + 1]._marks[0] : m.node
+    );
   } else if (!next) {
     removeTemplate(m._mutations[index]);
+    delete m._mutations[index];
   } else {
     resolve(m._mutations[index], next[Template][1]);
   }
