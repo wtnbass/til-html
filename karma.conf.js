@@ -6,7 +6,29 @@ module.exports = function(config) {
     ],
     browsers: ["ChromeHeadless"],
     frameworks: ["mocha", "sinon-chai"],
-    reporters: ["progress"],
+    preprocessors: {
+      "src/**/*.js": ["karma-coverage-istanbul-instrumenter"]
+    },
+    reporters: ["mocha", "coverage"],
+    mochaReporter: {
+      showDiff: true
+    },
+    coveragePreprocessor: {
+      options: {
+        sourceType: "module"
+      }
+    },
+    coverageIstanbulInstrumenter: {
+      esModules: true
+    },
+    coverageReporter: {
+      dir: "coverage/",
+      reporters: [
+        { type: "text-summary" },
+        { type: "html", subdir: "html" },
+        { type: "lcovonly", subdir: ".", file: "lcov.info" }
+      ]
+    },
     port: 9876,
     colors: true,
     logLevel: config.LOG_INFO,

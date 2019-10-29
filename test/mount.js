@@ -1,6 +1,8 @@
+/* eslint-env mocha */
+/* global expect, sinon */
 import { html, render, renderToString } from "../src/index.js";
 
-describe("vdom", () => {
+describe("mount", () => {
   let container;
   beforeEach(() => {
     container = document.body.appendChild(document.createElement("div"));
@@ -120,19 +122,8 @@ describe("vdom", () => {
     expect(`<div>0false<!----></div>`).to.equal(container.innerHTML);
     expect(`<div>0false</div>`).to.equal(renderToString(app));
   });
-});
 
-describe("not vdom", () => {
-  let container;
-  beforeEach(() => {
-    container = document.body.appendChild(document.createElement("div"));
-  });
-
-  afterEach(() => {
-    document.body.removeChild(container);
-  });
-
-  it("string", () => {
+  it("raw string", () => {
     const app = "string";
     render(app, container);
 
@@ -140,7 +131,7 @@ describe("not vdom", () => {
     expect(`string`).to.equal(renderToString(app));
   });
 
-  it("number", () => {
+  it("raw number", () => {
     const app = 100;
     render(app, container);
 
@@ -148,7 +139,7 @@ describe("not vdom", () => {
     expect(`100`).to.equal(renderToString(app));
   });
 
-  it("boolean", () => {
+  it("raw boolean", () => {
     const app = false;
     render(app, container);
 
@@ -156,7 +147,7 @@ describe("not vdom", () => {
     expect(`false`).to.equal(renderToString(app));
   });
 
-  it("array", () => {
+  it("raw array", () => {
     const app = ["a", "b", "c"];
     render(app, container);
 
