@@ -2,39 +2,35 @@
 
 WIP
 
-- lightweight (aim to gzip size <2k~2.5k)
+- lightweight (aim to gzip size <2.5k)
 - powerful attributes(key, ref, prefixs("@", ".", "?"))
 - SSR
 
 ## TODOs
 
-- render
-  - [x] Allow primitive values for the first argument
-- SSR
-  - [ ] `hydrate()`
 - parse
-  - [ ] ignore variables in comment
+  - [x] ignore variables in comment
   - [ ] spread attributes variable
   - [ ] tag name as variable
   - [ ] attribute name as variable
-- mutations
-  - [x] `ref` props
-  - [x] `key` props
 - test
-  - [ ] mount
+  - [ ] render
   - [ ] parse
-  - [ ] update
+  - [ ] mutations
   - [ ] keys
+- SSR
+  - [ ] `hydrate()`
+  - [ ] separate `renderToString()` to server.js
 
 ## Size
 
 From microbundle log
 
 ```[sh]
-1950 B: til-html.js.gz
-1735 B: til-html.js.br
-1950 B: til-html.mjs.gz
-1756 B: til-html.mjs.br
-2025 B: til-html.umd.js.gz
-1794 B: til-html.umd.js.br
+2024 B: til-html.js.gz
+1818 B: til-html.js.br
+2013 B: til-html.mjs.gz
+1829 B: til-html.mjs.br
+2095 B: til-html.umd.js.gz
+1873 B: til-html.umd.js.br
 ```

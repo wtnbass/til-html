@@ -1,12 +1,13 @@
 const openTagRegexp = /^\s*<\s*([a-zA-Z1-9-]+)/;
 const closeTagRegexp = /^\s*<\s*\/\s*([a-zA-Z1-9-]+)>/;
 const tagEndRegexp = /^\s*(\/)?>/;
-const voidTagNameRegexp = /^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/;
-const attrNameRegexp = /\s*([.?@a-zA-Z1-9-]+)=/;
+const voidTagNameRegexp = /^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/i;
+const attrNameRegexp = /\s*([.?@a-zA-Z1-9-]+)\s*=/;
 const quotedAttrValueRegexp = /\s*(["'])((?:.)*?)\1/;
-const rawAttrValueRegexp = /\s*(.+)?[\s>]/;
+const rawAttrValueRegexp = /\s*(.+?)[\s>]/;
 const doctypeRegexp = /^\s*<!DOCTYPE [^>]+>/i;
-const commentRegexp = /^\s*<!--/;
+const commentStartRegexp = /^\s*<!--/;
+const commentEndRegexp = /-->/;
 const attrPrefixRegexp = /^(@|\.|\?)/;
 
 const TYPE_NODE = 0;
@@ -30,14 +31,14 @@ const Cache = new WeakMap();
 export function html(strings) {
   let vdom = Cache.get(strings);
   vdom || Cache.set(strings, (vdom = parse(strings)));
-  let key = vdom[0].props && vdom[0].props.key;
+  let key = vdom[0] && vdom[0].props && vdom[0].props.key;
   if (key != null && key[Field]) key = arguments[key[Field]];
 
   return { [Template]: [vdom, arguments, key] };
 }
 
 export function render(template, container) {
-  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [0, template]];
+  const [vdom, args] = fromTemplate(template);
   let mutations = Cache.get(container);
   if (!mutations) {
     mount(vdom, container, (mutations = []));
@@ -47,26 +48,31 @@ export function render(template, container) {
 }
 
 export function renderToString(template) {
-  const [vdom, args] = template[Template] || [{ [Field]: 1 }, [0, template]];
+  const [vdom, args] = fromTemplate(template);
   return stringify(vdom, args);
+}
+
+function fromTemplate(template) {
+  return (template && template[Template]) || [{ [Field]: 1 }, [0, template]];
 }
 
 function parse(htmls) {
   const root = { children: [] };
-  const stack = [];
-
+  let stack = [];
   let inTag = false;
+  let inComment = false;
   let current = root;
   let attrName = "";
 
-  const commit = value => {
+  function commit(value) {
+    if (inComment) return;
     if (inTag && attrName) {
       (current.props || (current.props = {}))[attrName] = value;
       attrName = "";
     } else if (!inTag) {
-      current.children.push(value);
+      value && current.children.push(value);
     }
-  };
+  }
 
   for (let i = 0; i < htmls.length; i++) {
     if (i) commit({ [Field]: i });
@@ -76,7 +82,10 @@ function parse(htmls) {
     while (html) {
       if (last === html) throw new Error("parse error:\n\t" + last);
       last = html;
-      if (inTag) {
+      if (inComment) {
+        if ((r = ~html.search(commentEndRegexp))) inComment = false;
+        html = html.slice(r ? ~r + 3 : html.length);
+      } else if (inTag) {
         if ((r = html.match(tagEndRegexp))) {
           html = html.slice(r[0].length);
           if (r[1] || voidTagNameRegexp.test(current.tag)) {
@@ -97,14 +106,18 @@ function parse(htmls) {
       } else {
         if ((r = html.match(doctypeRegexp))) {
           html = html.slice(r[0].length);
-        } else if ((r = html.match(commentRegexp))) {
-          html = html.slice(html.indexOf("->") + 2);
+        } else if ((r = html.match(commentStartRegexp))) {
+          html = html.slice(2);
+          inComment = true;
         } else if ((r = html.match(closeTagRegexp))) {
           html = html.slice(r[0].length);
-          while (current.tag !== r[1]) {
+          const c = stack.slice();
+          try {
+            while (current.tag !== r[1]) current = stack.pop();
             current = stack.pop();
+          } catch (e) {
+            stack = c;
           }
-          current = stack.pop();
         } else if ((r = html.match(openTagRegexp))) {
           html = html.slice(r[0].length);
 
@@ -112,8 +125,8 @@ function parse(htmls) {
           current.children.push((current = { tag: r[1], children: [] }));
           inTag = true;
         } else {
-          const pos = html.indexOf("<");
-          const text = html.slice(0, ~pos ? pos : html.length);
+          (r = html.indexOf("<")) || (r = html.indexOf("<", 1));
+          const text = html.slice(0, ~r ? r : html.length);
           html = html.slice(text.length);
           commit(text.replace(/^\s*\n\s*|\s*\n\s*$/g, ""));
         }
@@ -170,7 +183,7 @@ function resolve(mutations, args) {
             ? args[i](node)
             : (args[i].current = node);
         } else {
-          node.setAttribute(name, args[i]);
+          args[i] != null && node.setAttribute(name, args[i]);
         }
       } else if (type === TYPE_BOOL_ATTR) {
         args[i] ? node.setAttribute(name, "") : node.removeAttribute(name);
@@ -187,6 +200,7 @@ function resolve(mutations, args) {
 
 function resolveNode(mutation, next, prev, index) {
   const base = next != null ? next : prev;
+  if (base == null) return;
   if (Array.isArray(base)) {
     prev = prev || [];
     if (mutation._mutations && base[0][Template][2] != null) {
@@ -211,18 +225,22 @@ function resolveTemplatesWithKey(parentMutation, nexts, prevs) {
   let prevIndex = 0;
   let nextIndex = 0;
   while (prevIndex < prevKeys.length || nextIndex < nextKeys.length) {
-    const prevKey = prevKeys[prevIndex];
-    const nextKey = nextKeys[nextIndex];
     const next = nexts[nextIndex];
 
-    if (nextKey != null && !prevKeys.includes(nextKey)) {
+    if (
+      nextKeys[nextIndex] != null &&
+      !prevKeys.includes(nextKeys[nextIndex])
+    ) {
       nextMutations[nextIndex++] = insertTemplate(
         next,
         mutations[prevIndex]
           ? mutations[prevIndex]._marks[0]
           : parentMutation.node
       );
-    } else if (prevKey != null && !nextKeys.includes(prevKey)) {
+    } else if (
+      prevKeys[prevIndex] != null &&
+      !nextKeys.includes(prevKeys[prevIndex])
+    ) {
       removeTemplate(mutations[prevIndex++]);
     } else {
       resolve(
@@ -251,7 +269,6 @@ function resolveTemplate(m, next, prev, index) {
 
 function resolveText(m, next, prev, index) {
   if (!prev) {
-    if (next == null) next = "";
     insertNode(
       ((m._texts || (m._texts = []))[index] = document.createTextNode(next)),
       m.node
@@ -293,39 +310,34 @@ function insertNode(newNode, refNode) {
 function stringify(vdom, args) {
   if (Array.isArray(vdom)) {
     return vdom.reduce((acc, v) => acc + stringify(v, args), "");
+  } else if (vdom == null) {
+    return "";
   } else if (vdom[Field]) {
     return stringify(args[vdom[Field]]);
   } else if (vdom[Template]) {
     return renderToString(vdom);
   } else if (!vdom.tag) {
-    return vdom != null ? "" + vdom : "";
+    return "" + vdom;
   } else {
     const { tag, props, children } = vdom;
-    let s = `<${tag}`;
+    let s = "";
     if (props) {
-      let r;
       let attrs = [];
       for (const name of Object.keys(props)) {
         if (name === "key" || name === "ref") continue;
         let v = props[name];
         if (v[Field]) v = args[v[Field]];
-        if ((r = name.match(attrPrefixRegexp))) {
-          if (r[0] === "?" && v) attrs.push(name.slice(1));
-        } else {
+        if ((s = name.match(attrPrefixRegexp))) {
+          if (s[0] === "?" && v) attrs.push(name.slice(1));
+        } else if (v != null) {
           attrs.push(`${name}="${v}"`);
         }
       }
-      if (attrs.length) {
-        s += ` ${attrs.join(" ")}`;
-      }
+      (s = "") || (s = attrs.join(" "));
     }
-
-    if (children.length) {
-      s += ">" + stringify(children, args) + `</${tag}>`;
-    } else if (voidTagNameRegexp.test(tag)) {
-      s += ">";
-    } else {
-      s += "/>";
+    s = `<${tag}${s && " " + s}>`;
+    if (!voidTagNameRegexp.test(tag)) {
+      s += `${stringify(children, args)}</${tag}>`;
     }
     return s;
   }
