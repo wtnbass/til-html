@@ -4,6 +4,13 @@ import { html, render, renderToString } from "../src/index.js";
 
 describe("render", () => {
   let container;
+
+  function test(tmpl, innerHTML, htmlString) {
+    render(tmpl, container);
+    expect(container.innerHTML).to.equal(innerHTML, "render");
+    expect(renderToString(tmpl)).to.equal(htmlString, "renderToString");
+  }
+
   beforeEach(() => {
     container = document.body.appendChild(document.createElement("div"));
   });
@@ -11,12 +18,6 @@ describe("render", () => {
   afterEach(() => {
     document.body.removeChild(container);
   });
-
-  function test(tmpl, innerHTML, htmlString) {
-    render(tmpl, container);
-    expect(container.innerHTML).to.equal(innerHTML, "render");
-    expect(renderToString(tmpl)).to.equal(htmlString, "renderToString");
-  }
 
   it("simple", () => {
     test(
@@ -73,7 +74,6 @@ describe("render", () => {
   });
 
   it("attributes", () => {
-    const ref = { current: null };
     test(
       html`
         <div
@@ -87,7 +87,6 @@ describe("render", () => {
           data-null=${null}
           data-undefined=${undefined}
           key=${1}
-          ref=${ref}
         ></div>
       `,
 
@@ -112,8 +111,35 @@ describe("render", () => {
         ">" +
         "</div>"
     );
+  });
 
+  it("ref function attribute", () => {
+    let refNode;
+    const app = html`
+      <div ref=${node => (refNode = node)}></div>
+    `;
+    render(app, container);
+    expect(container.querySelector("div")).to.equal(refNode);
+  });
+
+  it("ref object attribute", () => {
+    const ref = { current: null };
+    const app = html`
+      <div ref=${ref}></div>
+    `;
+    render(app, container);
     expect(container.querySelector("div")).to.equal(ref.current);
+  });
+
+  it("spread attribute", () => {
+    const cb = sinon.spy();
+    const props = { a: 1, "?b": 2, ".c": 3, "@d": cb };
+
+    const app = html`
+      <div ...${props}></div>
+    `;
+
+    test(app, '<div a="1" b=""></div>', '<div a="1" b></div>');
   });
 
   it("boolean attribute", () => {

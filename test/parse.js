@@ -4,19 +4,7 @@ import { html } from "../src/index.js";
 
 describe("parse", () => {
   let container;
-  const t = html`
-    ${0}
-  `;
-  const Template = Object.getOwnPropertySymbols(t)[0];
-  const Field = Object.getOwnPropertySymbols(t[Template][0][0])[0];
-
-  beforeEach(() => {
-    container = document.body.appendChild(document.createElement("div"));
-  });
-
-  afterEach(() => {
-    document.body.removeChild(container);
-  });
+  const [Template] = Object.getOwnPropertySymbols(html``);
 
   function test(tmpl, vdom, variables, key) {
     expect(vdom).to.deep.equal(tmpl[Template][0], "vdom");
@@ -31,9 +19,13 @@ describe("parse", () => {
     }
   }
 
-  function field(pos) {
-    return { [Field]: pos };
-  }
+  beforeEach(() => {
+    container = document.body.appendChild(document.createElement("div"));
+  });
+
+  afterEach(() => {
+    document.body.removeChild(container);
+  });
 
   it("single", () => {
     const app = html`
@@ -70,7 +62,7 @@ describe("parse", () => {
 
     test(
       app,
-      [{ tag: "div", children: ["hello, ", field(1), ", ", field(2)] }],
+      [{ tag: "div", children: ["hello, ", 1, ", ", 2] }],
       ["world", 1000]
     );
   });
@@ -96,15 +88,33 @@ describe("parse", () => {
           tag: "div",
           props: {
             name: "greet",
-            class: field(1),
-            "@click": field(2),
-            ".value": field(3),
-            "?yes": field(4)
+            class: 1,
+            "@click": 2,
+            ".value": 3,
+            "?yes": 4
           },
           children: ["hello"]
         }
       ],
       ["wrapper", cb, "value", true]
+    );
+  });
+
+  it("spread attribute", () => {
+    const props = { a: 1, "?b": 2, ".c": 3, "@d": () => {} };
+    // prettier-ignore
+    const app = html`
+      <div ...${props}></div>
+      <div ...  ${props}   ></div>
+    `;
+
+    test(
+      app,
+      [
+        { tag: "div", props: { "...": 1 }, children: [] },
+        { tag: "div", props: { "...": 2 }, children: [] }
+      ],
+      [props, props]
     );
   });
 
@@ -128,7 +138,7 @@ describe("parse", () => {
 
     test(
       app,
-      [{ tag: "div", props: { key: field(1) }, children: ["hello"] }],
+      [{ tag: "div", props: { key: 1 }, children: ["hello"] }],
       [80],
       80
     );
