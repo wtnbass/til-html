@@ -8,21 +8,8 @@ const rawAttrValueRegexp = /\s*(.+?)[\s>]/;
 const doctypeRegexp = /^\s*<!DOCTYPE [^>]+>/i;
 const commentStartRegexp = /^\s*<!--/;
 const commentEndRegexp = /-->/;
-const attrPrefixRegexp = /^(@|\.|\?)/;
-
-const TYPE_NODE = 0;
-const TYPE_ATTR = 1;
-const TYPE_BOOL_ATTR = 2;
-const TYPE_PROPS = 3;
-const TYPE_EVENT = 4;
-
-const prefixAttributesTypes = {
-  "?": TYPE_BOOL_ATTR,
-  ".": TYPE_PROPS,
-  "@": TYPE_EVENT
-};
-
-const Field = Symbol();
+const attrPrefixRegexp = /^(@|\.|\?)([a-zA-Z1-9-]+)/;
+const spreadAttrRegexp = /\s*(\.{3})\s*$/;
 
 const Template = Symbol();
 
@@ -32,7 +19,7 @@ export function html(strings) {
   let vdom = Cache.get(strings);
   vdom || Cache.set(strings, (vdom = parse(strings)));
   let key = vdom[0] && vdom[0].props && vdom[0].props.key;
-  if (key != null && key[Field]) key = arguments[key[Field]];
+  if (typeof key === "number") key = arguments[key];
 
   return { [Template]: [vdom, arguments, key] };
 }
@@ -48,17 +35,16 @@ export function render(template, container) {
 }
 
 export function renderToString(template) {
-  const [vdom, args] = fromTemplate(template);
-  return stringify(vdom, args);
+  return stringify(...fromTemplate(template));
 }
 
 function fromTemplate(template) {
-  return (template && template[Template]) || [{ [Field]: 1 }, [0, template]];
+  return (template && template[Template]) || [1, [0, template]];
 }
 
 function parse(htmls) {
   const root = { children: [] };
-  let stack = [];
+  const stack = [];
   let inTag = false;
   let inComment = false;
   let current = root;
@@ -66,6 +52,7 @@ function parse(htmls) {
 
   function commit(value) {
     if (inComment) return;
+    /* istanbul ignore else */
     if (inTag && attrName) {
       (current.props || (current.props = {}))[attrName] = value;
       attrName = "";
@@ -75,17 +62,19 @@ function parse(htmls) {
   }
 
   for (let i = 0; i < htmls.length; i++) {
-    if (i) commit({ [Field]: i });
+    if (i) commit(i);
     let html = htmls[i];
     let last;
     let r;
     while (html) {
+      /* istanbul ignore next */
       if (last === html) throw new Error("parse error:\n\t" + last);
       last = html;
       if (inComment) {
         if ((r = ~html.search(commentEndRegexp))) inComment = false;
         html = html.slice(r ? ~r + 3 : html.length);
       } else if (inTag) {
+        /* istanbul ignore else */
         if ((r = html.match(tagEndRegexp))) {
           html = html.slice(r[0].length);
           if (r[1] || voidTagNameRegexp.test(current.tag)) {
@@ -99,7 +88,10 @@ function parse(htmls) {
           let p = r[0].indexOf(">");
           html = html.slice(~p ? p : r[0].length);
           commit(r[1]);
-        } else if ((r = html.match(attrNameRegexp))) {
+        } else if (
+          ((r = html.match(spreadAttrRegexp)) && i < htmls.length - 1) ||
+          (r = html.match(attrNameRegexp))
+        ) {
           html = html.slice(r[0].length);
           attrName = r[1];
         }
@@ -111,13 +103,9 @@ function parse(htmls) {
           inComment = true;
         } else if ((r = html.match(closeTagRegexp))) {
           html = html.slice(r[0].length);
-          const c = stack.slice();
-          try {
-            while (current.tag !== r[1]) current = stack.pop();
-            current = stack.pop();
-          } catch (e) {
-            stack = c;
-          }
+          let j = stack.length;
+          while (j > 1 && stack[j - 1].tag !== r[1]) j--;
+          current = (stack.length = j) && stack.pop();
         } else if ((r = html.match(openTagRegexp))) {
           html = html.slice(r[0].length);
 
@@ -140,13 +128,11 @@ function mount(vdom, parent, mutations) {
   if (Array.isArray(vdom)) {
     vdom.forEach(v => mount(v, parent, mutations));
   } else if (!vdom.tag) {
-    if (vdom[Field]) {
-      mutations[vdom[Field]] = {
-        type: TYPE_NODE,
+    if (typeof vdom === "number") {
+      mutations[vdom] = {
         node: parent.appendChild(document.createComment(""))
       };
     } else {
-      if (vdom == null) vdom = "";
       parent.appendChild(document.createTextNode(vdom));
     }
   } else {
@@ -155,13 +141,8 @@ function mount(vdom, parent, mutations) {
     props &&
       Object.keys(props).forEach(name => {
         if (name === "key") return;
-        if (props[name][Field]) {
-          const r = name.match(attrPrefixRegexp);
-          mutations[props[name][Field]] = {
-            type: r ? prefixAttributesTypes[r[1]] : TYPE_ATTR,
-            node,
-            name: r ? name.slice(1) : name
-          };
+        if (typeof props[name] === "number") {
+          mutations[props[name]] = { node, name };
         } else {
           node.setAttribute(name, props[name]);
         }
@@ -172,29 +153,35 @@ function mount(vdom, parent, mutations) {
 
 function resolve(mutations, args) {
   for (let i = 1; i < mutations.length; i++) {
-    if (!mutations[i]) continue;
-    const { type, node, name, prev } = mutations[i];
-    if (args[i] !== prev) {
-      if (type === TYPE_NODE) {
-        resolveNode(mutations[i], args[i], prev, 0);
-      } else if (type === TYPE_ATTR) {
-        if (name === "ref") {
-          typeof args[i] === "function"
-            ? args[i](node)
-            : (args[i].current = node);
-        } else {
-          args[i] != null && node.setAttribute(name, args[i]);
-        }
-      } else if (type === TYPE_BOOL_ATTR) {
-        args[i] ? node.setAttribute(name, "") : node.removeAttribute(name);
-      } else if (type === TYPE_PROPS) {
-        node[name] = args[i];
-      } else if (type === TYPE_EVENT) {
-        prev && node.removeEventListener(name, prev);
-        node.addEventListener(name, args[i]);
-      }
-      mutations[i].prev = args[i];
+    const m = mutations[i];
+    if (m && m.prev !== args[i]) {
+      m.name
+        ? resolveAttribute(m.node, m.name, args[i], m.prev)
+        : resolveNode(m, args[i], m.prev, 0);
+      m.prev = args[i];
     }
+  }
+}
+
+function resolveAttribute(node, name, next, prev, r) {
+  if ((r = name.match(attrPrefixRegexp))) {
+    /* istanbul ignore else */
+    if (r[1] === "?") {
+      next ? node.setAttribute(r[2], "") : node.removeAttribute(name);
+    } else if (r[1] === ".") {
+      node[r[2]] = next;
+    } else if (r[1] === "@") {
+      prev && node.removeEventListener(r[2], prev);
+      node.addEventListener(r[2], next);
+    }
+  } else if (name === "...") {
+    Object.keys(next).forEach(key =>
+      resolveAttribute(node, key, next[key], prev && prev[key])
+    );
+  } else if (name === "ref") {
+    typeof next === "function" ? next(node) : (next.current = node);
+  } else {
+    next != null && node.setAttribute(name, next);
   }
 }
 
@@ -255,10 +242,7 @@ function resolveTemplatesWithKey(parentMutation, nexts, prevs) {
 function resolveTemplate(m, next, prev, index) {
   if (!prev) {
     m._mutations = m._mutations || [];
-    m._mutations[index] = insertTemplate(
-      next,
-      m._mutations[index + 1] ? m._mutations[index + 1]._marks[0] : m.node
-    );
+    m._mutations[index] = insertTemplate(next, m.node);
   } else if (!next) {
     removeTemplate(m._mutations[index]);
     delete m._mutations[index];
@@ -268,13 +252,14 @@ function resolveTemplate(m, next, prev, index) {
 }
 
 function resolveText(m, next, prev, index) {
-  if (!prev) {
+  if (prev == null) {
     insertNode(
       ((m._texts || (m._texts = []))[index] = document.createTextNode(next)),
       m.node
     );
-  } else if (!next) {
+  } else if (next == null) {
     m._texts[index].parentNode.removeChild(m._texts[index]);
+    delete m._texts[index];
   } else if (next !== prev) {
     m._texts[index].data = next;
   }
@@ -312,8 +297,8 @@ function stringify(vdom, args) {
     return vdom.reduce((acc, v) => acc + stringify(v, args), "");
   } else if (vdom == null) {
     return "";
-  } else if (vdom[Field]) {
-    return stringify(args[vdom[Field]]);
+  } else if (typeof vdom === "number" && args) {
+    return stringify(args[vdom]);
   } else if (vdom[Template]) {
     return renderToString(vdom);
   } else if (!vdom.tag) {
@@ -323,16 +308,21 @@ function stringify(vdom, args) {
     let s = "";
     if (props) {
       let attrs = [];
-      for (const name of Object.keys(props)) {
-        if (name === "key" || name === "ref") continue;
-        let v = props[name];
-        if (v[Field]) v = args[v[Field]];
-        if ((s = name.match(attrPrefixRegexp))) {
-          if (s[0] === "?" && v) attrs.push(name.slice(1));
-        } else if (v != null) {
-          attrs.push(`${name}="${v}"`);
+      const _attrs = (_props, _args) => {
+        for (const name of Object.keys(_props)) {
+          if (name === "key" || name === "ref") continue;
+          let v = _props[name];
+          if (typeof v === "number" && _args) v = _args[v];
+          if (name === "...") {
+            _attrs(v);
+          } else if ((s = name.match(attrPrefixRegexp))) {
+            if (s[1] === "?" && v) attrs.push(s[2]);
+          } else if (v != null) {
+            attrs.push(`${name}="${v}"`);
+          }
         }
-      }
+      };
+      _attrs(props, args);
       (s = "") || (s = attrs.join(" "));
     }
     s = `<${tag}${s && " " + s}>`;
