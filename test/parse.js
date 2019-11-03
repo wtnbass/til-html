@@ -165,6 +165,26 @@ describe("parse", () => {
     ]);
   });
 
+  it("includes unclosed tag", () => {
+    const app = html`
+    <div>
+      <b>unclosed
+      <p>tag</p>
+    </div>
+    <small>end
+  `;
+
+    test(app, [
+      {
+        tag: "div",
+        children: [
+          { tag: "b", children: ["unclosed", { tag: "p", children: ["tag"] }] }
+        ]
+      },
+      { tag: "small", children: ["end"] }
+    ]);
+  });
+
   it("ugly attributes", () => {
     // prettier-ignore
     const app = html`

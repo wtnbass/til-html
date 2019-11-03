@@ -103,9 +103,16 @@ function parse(htmls) {
           inComment = true;
         } else if ((r = html.match(closeTagRegexp))) {
           html = html.slice(r[0].length);
-          let j = stack.length;
-          while (j > 1 && stack[j - 1].tag !== r[1]) j--;
-          current = (stack.length = j) && stack.pop();
+          if (current.tag !== r[1]) {
+            let j = stack.length;
+            while (j > 0 && stack[j - 1].tag !== r[1]) j--;
+            if (j) {
+              stack.length = j - 1;
+              current = stack.pop();
+            }
+          } else {
+            current = stack.pop();
+          }
         } else if ((r = html.match(openTagRegexp))) {
           html = html.slice(r[0].length);
 
