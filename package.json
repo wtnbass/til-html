@@ -14,9 +14,10 @@
   "scripts": {
     "build": "microbundle",
     "watch": "microbundle watch",
-    "test": "npm run build -s && npm run lint -s && karma start",
+    "test": "npm run lint -s && npm run build -s && karma start",
     "test:single": "karma start",
     "test:watch": "karma start --no-single-run",
+    "test:browser": "karma start --no-single-run --browsers Chrome",
     "clean": "rm -fr dist coverage",
     "lint": "eslint src test"
   },
