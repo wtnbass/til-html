@@ -260,4 +260,16 @@ describe("render", () => {
     `;
     test(app, "<div>\\n</div><div>\\2c</div>", "<div>\\n</div><div>\\2c</div>");
   });
+
+  it("unsafe html", () => {
+    test(
+      html`
+        <div unsafe-html=${"<p>unsafe</p>"}>
+          ignored
+        </div>
+      `,
+      "<div><p>unsafe</p></div>",
+      "<div><p>unsafe</p></div>"
+    );
+  });
 });

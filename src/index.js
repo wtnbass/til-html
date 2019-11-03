@@ -155,7 +155,7 @@ function mount(vdom, parent, mutations) {
           node.setAttribute(name, props[name]);
         }
       });
-    mount(children, node, mutations);
+    if (!props || !props["unsafe-html"]) mount(children, node, mutations);
   }
 }
 
@@ -188,6 +188,8 @@ function resolveAttribute(node, name, next, prev, r) {
     );
   } else if (name === "ref") {
     typeof next === "function" ? next(node) : (next.current = node);
+  } else if (name === "unsafe-html") {
+    node.innerHTML = next;
   } else {
     next != null && node.setAttribute(name, next);
   }
@@ -314,8 +316,8 @@ function stringify(vdom, args) {
   } else {
     const { tag, props, children } = vdom;
     let s = "";
+    let attrs = [];
     if (props) {
-      let attrs = [];
       const _attrs = (_props, _args) => {
         for (const name of Object.keys(_props)) {
           if (name === "key" || name === "ref") continue;
@@ -323,6 +325,8 @@ function stringify(vdom, args) {
           if (typeof v === "number" && _args) v = _args[v];
           if (name === "...") {
             _attrs(v);
+          } else if (name === "unsafe-html") {
+            attrs._html = v;
           } else if ((s = name.match(attrPrefixRegexp))) {
             if (s[1] === "?" && v) attrs.push(s[2]);
           } else if (v != null) {
@@ -335,7 +339,7 @@ function stringify(vdom, args) {
     }
     s = `<${tag}${s && " " + s}>`;
     if (!voidTagNameRegexp.test(tag)) {
-      s += `${stringify(children, args)}</${tag}>`;
+      s += `${attrs._html || stringify(children, args)}</${tag}>`;
     }
     return s;
   }

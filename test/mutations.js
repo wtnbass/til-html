@@ -386,4 +386,20 @@ describe("mutations", () => {
     expect(cb2).calledOnce;
     expect(cb1).calledOnce;
   });
+
+  it("unsafe html", () => {
+    const app = () => html`
+      <div unsafe-html=${"<span>unsafe</span>"}>
+        ignored
+      </div>
+    `;
+    render(app(), container);
+    const span1 = container.querySelector("div").querySelector("span");
+    expect(span1.innerText).to.equal("unsafe");
+
+    render(app(), container);
+    const span2 = container.querySelector("div").querySelector("span");
+    expect(span2.innerText).to.equal("unsafe");
+    expect(span2).to.equal(span1);
+  });
 });
