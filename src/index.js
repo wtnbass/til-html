@@ -171,11 +171,12 @@ function resolve(mutations, args) {
   }
 }
 
-function resolveAttribute(node, name, next, prev, r) {
+function resolveAttribute(node, name, next, prev) {
+  let r;
   if ((r = name.match(attrPrefixRegexp))) {
     /* istanbul ignore else */
     if (r[1] === "?") {
-      next ? node.setAttribute(r[2], "") : node.removeAttribute(name);
+      next ? node.setAttribute(r[2], "") : node.removeAttribute(r[2]);
     } else if (r[1] === ".") {
       node[r[2]] = next;
     } else if (r[1] === "@") {

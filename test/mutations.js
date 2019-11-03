@@ -362,26 +362,26 @@ describe("mutations", () => {
 
     const cb1 = sinon.spy();
     render(
-      app({ name: "Alice", "?bool": false, ".value": 100, "@click": cb1 }),
+      app({ name: "Alice", "?bool": true, ".value": 100, "@click": cb1 }),
       container
     );
     const div = container.querySelector("div");
     div.click();
 
     expect(div.getAttribute("name")).to.equal("Alice");
-    expect(div.hasAttribute("bool")).to.equal(false);
+    expect(div.hasAttribute("bool")).to.equal(true);
     expect(div.value).to.equal(100);
     expect(cb1).calledOnce;
 
     const cb2 = sinon.spy();
     render(
-      app({ name: "Bob", "?bool": true, ".value": 200, "@click": cb2 }),
+      app({ name: "Bob", "?bool": false, ".value": 200, "@click": cb2 }),
       container
     );
     div.click();
 
     expect(div.getAttribute("name")).to.equal("Bob");
-    expect(div.hasAttribute("bool")).to.equal(true);
+    expect(div.hasAttribute("bool")).to.equal(false);
     expect(div.value).to.equal(200);
     expect(cb2).calledOnce;
     expect(cb1).calledOnce;
