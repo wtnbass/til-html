@@ -16,6 +16,7 @@ const Template = Symbol();
 const Cache = new WeakMap();
 
 export function html(strings) {
+  strings = strings.raw;
   let vdom = Cache.get(strings);
   vdom || Cache.set(strings, (vdom = parse(strings)));
   let key = vdom[0] && vdom[0].props && vdom[0].props.key;

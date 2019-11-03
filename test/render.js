@@ -251,4 +251,13 @@ describe("render", () => {
   it("raw undefined", () => {
     test(undefined, `<!---->`, ``);
   });
+
+  it("escaped value in template", () => {
+    // prettier-ignore
+    const app = html`
+      <div>\n</div>
+      <div>\2c</div>
+    `;
+    test(app, "<div>\\n</div><div>\\2c</div>", "<div>\\n</div><div>\\2c</div>");
+  });
 });
